@@ -5,9 +5,9 @@ using System.Threading.Tasks;
 
 namespace ImageRecognitionApi.Domain.Services.Communications
 {
-    public class ImageResponse : BaseResponse<double>
+    public class ImageResponse : BaseResponse<object>
     {
-        public ImageResponse(double resource) : base(resource)
+        public ImageResponse(object resource) : base(resource)
         {
         }
 

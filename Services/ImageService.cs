@@ -1,8 +1,11 @@
-﻿using Amazon.Rekognition;
+﻿using Amazon;
+using Amazon.Rekognition;
 using Amazon.Rekognition.Model;
+using Amazon.Runtime;
 using ImageRecognitionApi.Domain.Services;
 using ImageRecognitionApi.Domain.Services.Communications;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Win32.SafeHandles;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -14,33 +17,25 @@ namespace ImageRecognitionApi.Services
     public class ImageService : IImageService
     {
         private readonly float similarityThreshold;
-        private String sourceImage;
-        private String targetImage;
-         
+        private readonly String accessKeyID = "a";
+        private readonly String secretKey = "b";
         public ImageService()
         {
             similarityThreshold = 70F;
         }
         public async Task<ImageResponse> CompareImages(IFormFile source, IFormFile target)
         {
-            AmazonRekognitionClient rekognitionClient = new AmazonRekognitionClient();
+            var credentials = new BasicAWSCredentials(accessKeyID, secretKey);
+            AmazonRekognitionClient rekognitionClient = new AmazonRekognitionClient(credentials, RegionEndpoint.USEast1);
 
             // Setting Image Source
             Amazon.Rekognition.Model.Image imageSource = new Amazon.Rekognition.Model.Image();
-            using (var memoryStream = new MemoryStream())
-            {
-                await source.OpenReadStream().CopyToAsync(memoryStream);
-
-                var fileBytes = memoryStream.ToArray();
-                sourceImage = Convert.ToBase64String(fileBytes);
-            }
             try
             {
-                using (FileStream fs = new FileStream(sourceImage, FileMode.Open, FileAccess.Read))
+                using (var memoryStream = new MemoryStream())
                 {
-                    byte[] data = new byte[fs.Length];
-                    fs.Read(data, 0, (int)fs.Length);
-                    imageSource.Bytes = new MemoryStream(data);
+                    await source.OpenReadStream().CopyToAsync(memoryStream);
+                    imageSource.Bytes = memoryStream;
                 }
             }
             catch (Exception e)
@@ -50,21 +45,12 @@ namespace ImageRecognitionApi.Services
 
             // Setting Image Target
             Amazon.Rekognition.Model.Image imageTarget = new Amazon.Rekognition.Model.Image();
-            using (var memoryStream = new MemoryStream())
-            {
-                await target.OpenReadStream().CopyToAsync(memoryStream);
-
-                var fileBytes = memoryStream.ToArray();
-                targetImage = Convert.ToBase64String(fileBytes);
-            }
             try
             {
-                using (FileStream fs = new FileStream(targetImage, FileMode.Open, FileAccess.Read))
+                using (var memoryStream = new MemoryStream())
                 {
-                    byte[] data = new byte[fs.Length];
-                    data = new byte[fs.Length];
-                    fs.Read(data, 0, (int)fs.Length);
-                    imageTarget.Bytes = new MemoryStream(data);
+                    await target.OpenReadStream().CopyToAsync(memoryStream);
+                    imageTarget.Bytes = memoryStream;
                 }
             }
             catch (Exception e)
@@ -83,20 +69,29 @@ namespace ImageRecognitionApi.Services
 
             // Display results
             float result = 0;
+            float pleft = 0;
+            float ptop = 0;
+
             foreach (CompareFacesMatch match in compareFacesResponse.FaceMatches)
             {
-                ComparedFace face = match.Face;
-                BoundingBox position = face.BoundingBox;
-                Console.WriteLine("Face at " + position.Left
-                      + " " + position.Top
-                      + " matches with " + match.Similarity
-                      + "% confidence.");
-                result = match.Similarity > result ? match.Similarity : result;
+                if (match.Similarity > result)
+                {
+                    result = match.Similarity;
+                    ComparedFace face = match.Face;
+                    BoundingBox position = face.BoundingBox;
+                    pleft = position.Left;
+                    ptop = position.Top;
+                }
             }
 
-            Console.WriteLine("There was " + compareFacesResponse.UnmatchedFaces.Count + " face(s) that did not match");
-
-            return new ImageResponse(result);
+            var response = new
+            {
+                similarity = result,
+                leftPosition = pleft,
+                topPosition = ptop,
+                facesDetected = compareFacesResponse.UnmatchedFaces.Count + compareFacesResponse.FaceMatches.Count
+            };
+            return new ImageResponse(response);
         }
     }
 }

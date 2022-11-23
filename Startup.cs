@@ -33,7 +33,6 @@ namespace ImageRecognitionApi
 
             services.AddScoped<IImageService, ImageService>();
 
-
             services.AddControllers();
             services.AddSwaggerGen(c =>
             {
